@@ -23,7 +23,9 @@ data class StorageCategoryStats(
     val categoryName: String,
     val sizeBytes: Long,
     val color: Color,
-    val isSelected: Boolean = true
+    val isSelected: Boolean = true,
+    val subCategories: List<StorageCategoryStats>? = null,
+    val isExpanded: Boolean = false
 )
 
 data class StorageStatsModel(

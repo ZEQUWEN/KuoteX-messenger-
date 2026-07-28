@@ -225,11 +225,16 @@ class AppViewModel(private val repository: MessengerRepository, val userPrefs: c
         StorageStatsModel(
             maxCacheSizeBytes = -1L,
             categories = listOf(
-                StorageCategoryStats("Стикеры и эмодзи", 73800000L, Color(0xFFFF9800)),
-                StorageCategoryStats("Фото профиля", 49800000L, Color(0xFF4CAF50)),
-                StorageCategoryStats("Видео", 49500000L, Color(0xFF2196F3)),
-                StorageCategoryStats("Прочее", 15800000L, Color(0xFF9C27B0)),
-                StorageCategoryStats("Другое", 15900000L, Color(0xFFFFC107))
+                StorageCategoryStats("Стикеры и эмодзи", 131900000L, Color(0xFFFF9800)),
+                StorageCategoryStats("Видео", 56100000L, Color(0xFF2196F3)),
+                StorageCategoryStats("Фото профиля", 55100000L, Color(0xFF00BFA5)),
+                StorageCategoryStats("Файлы", 26300000L, Color(0xFF4CAF50)),
+                StorageCategoryStats("Другое", 23200000L, Color(0xFFFFC107), subCategories = listOf(
+                    StorageCategoryStats("Фото", 12100000L, Color(0xFF2196F3)),
+                    StorageCategoryStats("Прочее", 10600000L, Color(0xFF9C27B0)),
+                    StorageCategoryStats("Истории", 511200L, Color(0xFFF44336)),
+                    StorageCategoryStats("Музыка", 17500L, Color(0xFF673AB7))
+                ))
             )
         )
     )
@@ -295,11 +300,33 @@ class AppViewModel(private val repository: MessengerRepository, val userPrefs: c
         _storageStats.value = currentStats.copy(categories = newCategories)
     }
 
-    fun toggleStorageCategory(categoryName: String) {
+    fun toggleStorageCategory(categoryName: String, isSubCategory: Boolean = false, parentCategoryName: String? = null) {
+        val currentStats = _storageStats.value
+        val newCategories = currentStats.categories.map { category ->
+            if (isSubCategory && category.categoryName == parentCategoryName) {
+                category.copy(
+                    subCategories = category.subCategories?.map { sub ->
+                        if (sub.categoryName == categoryName) sub.copy(isSelected = !sub.isSelected) else sub
+                    }
+                )
+            } else if (!isSubCategory && category.categoryName == categoryName) {
+                val newSelection = !category.isSelected
+                category.copy(
+                    isSelected = newSelection,
+                    subCategories = category.subCategories?.map { it.copy(isSelected = newSelection) }
+                )
+            } else {
+                category
+            }
+        }
+        _storageStats.value = currentStats.copy(categories = newCategories)
+    }
+
+    fun toggleStorageCategoryExpand(categoryName: String) {
         val currentStats = _storageStats.value
         val newCategories = currentStats.categories.map {
             if (it.categoryName == categoryName) {
-                it.copy(isSelected = !it.isSelected)
+                it.copy(isExpanded = !it.isExpanded)
             } else {
                 it
             }

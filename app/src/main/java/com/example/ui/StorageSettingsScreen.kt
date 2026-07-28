@@ -19,12 +19,17 @@ import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.geometry.CornerRadius
+import com.example.utils.CacheCalculator
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -38,6 +43,10 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.isGranted
+import com.google.accompanist.permissions.rememberPermissionState
+import android.Manifest
 import kotlin.math.sin
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -313,7 +322,7 @@ fun NetworkUsageScreen(viewModel: AppViewModel, navController: NavController) {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
 @Composable
 fun StorageUsageScreen(viewModel: AppViewModel, navController: NavController) {
     val storageStats by viewModel.storageStats.collectAsState()
@@ -322,10 +331,47 @@ fun StorageUsageScreen(viewModel: AppViewModel, navController: NavController) {
     var clearProgress by remember { mutableStateOf(0f) }
     val scope = rememberCoroutineScope()
     
+    val storagePermissionState = rememberPermissionState(
+        Manifest.permission.READ_EXTERNAL_STORAGE
+    )
+    
+    var animationTrigger by remember { mutableStateOf(false) }
+    
+    LaunchedEffect(Unit) {
+        if (!storagePermissionState.status.isGranted) {
+            storagePermissionState.launchPermissionRequest()
+        }
+        animationTrigger = true
+    }
+    
     val totalSize = storageStats.categories.sumOf { it.sizeBytes }
-    val selectedSize = storageStats.categories.filter { it.isSelected }.sumOf { it.sizeBytes }
+    val selectedSize = storageStats.categories.sumOf { category ->
+        if (category.subCategories != null) {
+            category.subCategories.filter { it.isSelected }.sumOf { it.sizeBytes }
+        } else {
+            if (category.isSelected) category.sizeBytes else 0L
+        }
+    }
+
+    val maxCacheSizeIndex by viewModel.maxCacheSizeIndex.collectAsState()
+    val maxLimitBytes = when (maxCacheSizeIndex) {
+        0 -> 5L * 1024 * 1024 * 1024
+        1 -> 16L * 1024 * 1024 * 1024
+        2 -> 32L * 1024 * 1024 * 1024
+        else -> Long.MAX_VALUE
+    }
+    
+    val isScanning by CacheCalculator.isScanning.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
+    
+    LaunchedEffect(totalSize, maxLimitBytes) {
+        if (maxLimitBytes != Long.MAX_VALUE && totalSize > maxLimitBytes * 0.8) {
+            snackbarHostState.showSnackbar("Внимание: объём кэша превышает 80% от установленного лимита!")
+        }
+    }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("Использование памяти") },
@@ -333,6 +379,24 @@ fun StorageUsageScreen(viewModel: AppViewModel, navController: NavController) {
                     IconButton(onClick = { navController.popBackStack() }) { 
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") 
                     } 
+                },
+                actions = {
+                    if (isScanning) {
+                        CircularProgressIndicator(
+                            modifier = Modifier
+                                .padding(end = 16.dp)
+                                .size(24.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    } else if (maxLimitBytes != Long.MAX_VALUE && totalSize > maxLimitBytes * 0.8) {
+                        Icon(
+                            imageVector = Icons.Filled.Warning,
+                            contentDescription = "Внимание",
+                            tint = Color.Red,
+                            modifier = Modifier.padding(end = 16.dp)
+                        )
+                    }
                 }
             )
         }
@@ -346,6 +410,12 @@ fun StorageUsageScreen(viewModel: AppViewModel, navController: NavController) {
                 modifier = Modifier.weight(1f)
             ) {
                 item {
+                    val pieProgress by animateFloatAsState(
+                        targetValue = if (animationTrigger) 1f else 0f,
+                        animationSpec = tween(1000, easing = FastOutSlowInEasing),
+                        label = "pieProgress"
+                    )
+                    
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -358,7 +428,7 @@ fun StorageUsageScreen(viewModel: AppViewModel, navController: NavController) {
                             
                             if (totalSize > 0) {
                                 for (category in storageStats.categories) {
-                                    val sweepAngle = (category.sizeBytes.toFloat() / totalSize.toFloat()) * 360f
+                                    val sweepAngle = (category.sizeBytes.toFloat() / totalSize.toFloat()) * 360f * pieProgress
                                     if (sweepAngle > 0) {
                                         drawArc(
                                             color = category.color,
@@ -393,29 +463,150 @@ fun StorageUsageScreen(viewModel: AppViewModel, navController: NavController) {
                     }
                 }
                 
-                items(storageStats.categories) { category ->
-                    val percentage = if (totalSize > 0) {
-                        (category.sizeBytes.toFloat() / totalSize.toFloat() * 100).toInt()
-                    } else 0
+                item {
+                    val context = LocalContext.current
+                    LaunchedEffect(storagePermissionState.status.isGranted) {
+                        if (storagePermissionState.status.isGranted) {
+                            CacheCalculator.startMonitoring(context, scope)
+                        } else {
+                            // Can still calculate basic app folders that don't need permissions
+                            CacheCalculator.startMonitoring(context, scope) 
+                        }
+                    }
+                    val deviceStorageInfo by CacheCalculator.deviceStorageInfo.collectAsState()
+                    val totalDevice = deviceStorageInfo.totalSpaceBytes
+                    val freeDevice = deviceStorageInfo.freeSpaceBytes
+                    val appUsage = deviceStorageInfo.appUsageBytes
                     
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { viewModel.toggleStorageCategory(category.categoryName) }
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = if (category.isSelected) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked,
-                            contentDescription = null,
-                            tint = if (category.isSelected) category.color else Color.Gray,
-                            modifier = Modifier.size(24.dp)
+                    val otherAppsUsage = totalDevice - freeDevice - appUsage
+                    
+                    val appUsagePercent = if (totalDevice > 0) (appUsage.toFloat() / totalDevice * 100) else 0f
+                    val displayAppUsagePercent = if (appUsagePercent > 0 && appUsagePercent < 1f) "<1" else appUsagePercent.toInt().toString()
+                    
+                    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = "Neon Messenger занимает $displayAppUsagePercent% места на устройстве.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Text(category.categoryName, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
-                        Text("$percentage%", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(formatBytes(category.sizeBytes), style = MaterialTheme.typography.bodyMedium)
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Row(modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp))) {
+                            if (totalDevice > 0) {
+                                val targetAppWeight = if (animationTrigger) appUsage.toFloat() / totalDevice else 0f
+                                val targetOtherWeight = if (animationTrigger) otherAppsUsage.toFloat() / totalDevice else 0f
+                                
+                                val animatedAppWeight by animateFloatAsState(
+                                    targetValue = targetAppWeight,
+                                    animationSpec = tween(1000, easing = FastOutSlowInEasing),
+                                    label = "appWeight"
+                                )
+                                val animatedOtherWeight by animateFloatAsState(
+                                    targetValue = targetOtherWeight,
+                                    animationSpec = tween(1000, easing = FastOutSlowInEasing),
+                                    label = "otherWeight"
+                                )
+                                val animatedFreeWeight = (1f - animatedAppWeight - animatedOtherWeight).coerceAtLeast(0f)
+                                
+                                if (animatedAppWeight > 0f) {
+                                    Box(modifier = Modifier.weight(animatedAppWeight).fillMaxHeight().background(MaterialTheme.colorScheme.primary))
+                                }
+                                if (animatedOtherWeight > 0f) {
+                                    Box(modifier = Modifier.weight(animatedOtherWeight).fillMaxHeight().background(Color.Gray.copy(alpha = 0.5f)))
+                                }
+                                if (animatedFreeWeight > 0f) {
+                                    Box(modifier = Modifier.weight(animatedFreeWeight).fillMaxHeight().background(Color.DarkGray.copy(alpha = 0.2f)))
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                storageStats.categories.forEach { category ->
+                    item {
+                        val percentage = if (totalSize > 0) {
+                            (category.sizeBytes.toFloat() / totalSize.toFloat() * 100).toInt()
+                        } else 0
+                        
+                        val displayPercentage = if (percentage == 0 && category.sizeBytes > 0) "<1.0%" else "$percentage%"
+                        
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { 
+                                    if (category.subCategories != null) {
+                                        viewModel.toggleStorageCategoryExpand(category.categoryName)
+                                    } else {
+                                        viewModel.toggleStorageCategory(category.categoryName) 
+                                    }
+                                }
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            IconButton(
+                                onClick = { viewModel.toggleStorageCategory(category.categoryName) },
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (category.isSelected) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked,
+                                    contentDescription = null,
+                                    tint = if (category.isSelected) category.color else Color.Gray,
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Text(category.categoryName, style = MaterialTheme.typography.bodyLarge)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(displayPercentage, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            
+                            if (category.subCategories != null) {
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Icon(
+                                    imageVector = if (category.isExpanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                            
+                            Spacer(modifier = Modifier.weight(1f))
+                            Text(formatBytes(category.sizeBytes), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.primary)
+                        }
+                    }
+                    
+                    if (category.isExpanded && category.subCategories != null) {
+                        category.subCategories.forEach { sub ->
+                            item {
+                                val percentage = if (totalSize > 0) {
+                                    (sub.sizeBytes.toFloat() / totalSize.toFloat() * 100).toInt()
+                                } else 0
+                                
+                                val displayPercentage = if (percentage == 0 && sub.sizeBytes > 0) "<1.0%" else "$percentage%"
+                                
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { viewModel.toggleStorageCategory(sub.categoryName, true, category.categoryName) }
+                                        .padding(start = 48.dp, top = 8.dp, bottom = 8.dp, end = 16.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    IconButton(
+                                        onClick = { viewModel.toggleStorageCategory(sub.categoryName, true, category.categoryName) },
+                                        modifier = Modifier.size(20.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = if (sub.isSelected) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked,
+                                            contentDescription = null,
+                                            tint = if (sub.isSelected) sub.color else Color.Gray,
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(16.dp))
+                                    Text(sub.categoryName, style = MaterialTheme.typography.bodyMedium)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(displayPercentage, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Spacer(modifier = Modifier.weight(1f))
+                                    Text(formatBytes(sub.sizeBytes), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+                                }
+                            }
+                        }
                     }
                 }
                 
@@ -441,7 +632,13 @@ fun StorageUsageScreen(viewModel: AppViewModel, navController: NavController) {
                                             delay(20) 
                                         }
                                         delay(500)
-                                        val selectedNames = storageStats.categories.filter { it.isSelected }.map { it.categoryName }
+                                        val selectedNames = storageStats.categories.flatMap { cat ->
+                                            if (cat.subCategories != null) {
+                                                cat.subCategories.filter { it.isSelected }.map { it.categoryName }
+                                            } else {
+                                                if (cat.isSelected) listOf(cat.categoryName) else emptyList()
+                                            }
+                                        }
                                         viewModel.clearCache(selectedNames)
                                         isClearing = false
                                     }
