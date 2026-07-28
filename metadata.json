@@ -1,0 +1,8 @@
+{
+  "name": " KuoteX ",
+  "description": "Imported from GitHub: ZEQUWEN/INNOVATE-MESSENGER",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
