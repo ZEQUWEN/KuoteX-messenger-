@@ -41,6 +41,16 @@ object CacheCalculator {
         }
     }
 
+    fun forceScan(context: Context, scope: CoroutineScope) {
+        if (_isScanning.value) return
+        scope.launch(Dispatchers.IO) {
+            _isScanning.value = true
+            delay(800) // Artificial delay for perceived performance
+            calculate(context)
+            _isScanning.value = false
+        }
+    }
+
     private fun calculate(context: Context) {
         try {
             val statFs = StatFs(Environment.getDataDirectory().path)

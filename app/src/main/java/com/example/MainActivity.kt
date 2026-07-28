@@ -78,6 +78,15 @@ class MainActivity : ComponentActivity() {
                 workRequest
             )
             
+            val cacheCleanupRequest = androidx.work.PeriodicWorkRequestBuilder<com.example.data.CacheCleanupWorker>(
+                7, java.util.concurrent.TimeUnit.DAYS
+            ).build()
+            androidx.work.WorkManager.getInstance(applicationContext).enqueueUniquePeriodicWork(
+                "CacheCleanup",
+                androidx.work.ExistingPeriodicWorkPolicy.KEEP,
+                cacheCleanupRequest
+            )
+            
             val repository = MessengerRepository(db.userDao(), db.chatDao(), db.messageDao(), db.groupMemberDao(), db.draftDao(), db.contactDao(), sharedPrefs, webSocketManager)
 
 

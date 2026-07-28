@@ -22,6 +22,9 @@ import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -52,6 +55,9 @@ import kotlin.math.sin
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsStorageScreen(viewModel: AppViewModel, navController: NavController) {
+    val storageStats by viewModel.storageStats.collectAsState()
+    val largestCategories = storageStats.categories.sortedByDescending { it.sizeBytes }.take(2)
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -68,6 +74,7 @@ fun SettingsStorageScreen(viewModel: AppViewModel, navController: NavController)
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
         ) {
             ListItem(
                 headlineContent = { Text("Использование памяти") },
@@ -95,6 +102,147 @@ fun SettingsStorageScreen(viewModel: AppViewModel, navController: NavController)
                 modifier = Modifier.clickable { navController.navigate("settings/storage/network") }
             )
             
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+            
+            var showOptimizeDialog by remember { mutableStateOf(false) }
+            var isScanningForDuplicates by remember { mutableStateOf(false) }
+            var duplicateSizeFound by remember { mutableStateOf(0L) }
+            var isClearingDuplicates by remember { mutableStateOf(false) }
+            var clearProgress by remember { mutableStateOf(0f) }
+            val coroutineScope = rememberCoroutineScope()
+
+            if (showOptimizeDialog) {
+                AlertDialog(
+                    onDismissRequest = { if (!isClearingDuplicates) showOptimizeDialog = false },
+                    title = { Text("Оптимизация хранилища") },
+                    text = {
+                        Column {
+                            if (isClearingDuplicates) {
+                                Text("Очистка дубликатов...")
+                                Spacer(modifier = Modifier.height(16.dp))
+                                NeonProgressBar(progress = clearProgress)
+                            } else {
+                                Text("Найдено ${formatBytes(duplicateSizeFound)} дубликатов файлов кэша Neon Messenger. Очистить их для освобождения места?")
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        if (!isClearingDuplicates) {
+                            Button(
+                                onClick = {
+                                    coroutineScope.launch {
+                                        isClearingDuplicates = true
+                                        clearProgress = 0f
+                                        while (clearProgress < 1f) {
+                                            clearProgress += 0.05f
+                                            delay(100)
+                                        }
+                                        isClearingDuplicates = false
+                                        showOptimizeDialog = false
+                                    }
+                                }
+                            ) {
+                                Text("Очистить")
+                            }
+                        }
+                    },
+                    dismissButton = {
+                        if (!isClearingDuplicates) {
+                            TextButton(onClick = { showOptimizeDialog = false }) {
+                                Text("Отмена")
+                            }
+                        }
+                    }
+                )
+            }
+
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "Оптимизация хранилища",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Рекомендуем: удаление старых медиасообщений или сжатие сохраненных изображений для освобождения места.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Button(onClick = {
+                            coroutineScope.launch {
+                                isScanningForDuplicates = true
+                                delay(1500) // Simulate scanning
+                                duplicateSizeFound = (Math.random() * 200 * 1024 * 1024).toLong() + 50 * 1024 * 1024 // 50MB to 250MB
+                                isScanningForDuplicates = false
+                                showOptimizeDialog = true
+                            }
+                        }) {
+                            if (isScanningForDuplicates) {
+                                CircularProgressIndicator(modifier = Modifier.size(16.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Сканирование...")
+                            } else {
+                                Text("Оптимизировать")
+                            }
+                        }
+                        OutlinedButton(onClick = { /* Action to export */ }) {
+                            Text("Экспорт")
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(
+                        onClick = { /* Action to clean old/duplicate files */ },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                    ) {
+                         Text("Очистить старые файлы и дубликаты")
+                    }
+                }
+            }
+
+            if (largestCategories.isNotEmpty()) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .padding(bottom = 16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = "Персональные рекомендации",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        largestCategories.forEach { category ->
+                            val actionText = when (category.categoryName) {
+                                "Видео" -> "Удалить старые видеосообщения"
+                                "Фото" -> "Удалить дубликаты изображений"
+                                "Файлы" -> "Удалить дубликаты файлов"
+                                else -> "Очистить ${category.categoryName.lowercase()}"
+                            }
+                            Text(
+                                text = "• $actionText (${formatBytes(category.sizeBytes)})",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        }
+                    }
+                }
+            }
+
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
             
             Text(
@@ -363,6 +511,7 @@ fun StorageUsageScreen(viewModel: AppViewModel, navController: NavController) {
     
     val isScanning by CacheCalculator.isScanning.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
     
     LaunchedEffect(totalSize, maxLimitBytes) {
         if (maxLimitBytes != Long.MAX_VALUE && totalSize > maxLimitBytes * 0.8) {
@@ -389,13 +538,18 @@ fun StorageUsageScreen(viewModel: AppViewModel, navController: NavController) {
                             strokeWidth = 2.dp,
                             color = MaterialTheme.colorScheme.primary
                         )
-                    } else if (maxLimitBytes != Long.MAX_VALUE && totalSize > maxLimitBytes * 0.8) {
-                        Icon(
-                            imageVector = Icons.Filled.Warning,
-                            contentDescription = "Внимание",
-                            tint = Color.Red,
-                            modifier = Modifier.padding(end = 16.dp)
-                        )
+                    } else {
+                        IconButton(onClick = { CacheCalculator.forceScan(context, scope) }) {
+                            Icon(Icons.Filled.Refresh, "Сканировать сейчас")
+                        }
+                        if (maxLimitBytes != Long.MAX_VALUE && totalSize > maxLimitBytes * 0.8) {
+                            Icon(
+                                imageVector = Icons.Filled.Warning,
+                                contentDescription = "Внимание",
+                                tint = Color.Red,
+                                modifier = Modifier.padding(end = 16.dp)
+                            )
+                        }
                     }
                 }
             )
@@ -822,4 +976,39 @@ fun CacheManagerSection(viewModel: AppViewModel) {
         textAlign = TextAlign.Start,
         modifier = Modifier.padding(horizontal = 24.dp)
     )
+}
+@Composable
+fun NeonProgressBar(progress: Float, modifier: Modifier = Modifier) {
+    val animatedProgress by animateFloatAsState(
+        targetValue = progress,
+        animationSpec = tween(500, easing = LinearOutSlowInEasing),
+        label = "neon_progress"
+    )
+    val infiniteTransition = rememberInfiniteTransition(label = "neon_pulse")
+    val alpha by infiniteTransition.animateFloat(
+        initialValue = 0.5f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(800, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "neon_alpha"
+    )
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(12.dp)
+            .background(Color.DarkGray, RoundedCornerShape(6.dp))
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(fraction = animatedProgress)
+                .fillMaxHeight()
+                .background(
+                    color = Color.Cyan.copy(alpha = alpha),
+                    shape = RoundedCornerShape(6.dp)
+                )
+        )
+    }
 }
