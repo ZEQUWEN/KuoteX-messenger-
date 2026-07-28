@@ -24,6 +24,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.rememberSwipeToDismissBoxState
@@ -758,12 +761,34 @@ fun ChatListItem(chat: Chat, isTyping: Boolean = false, onClick: () -> Unit, onA
                     maxLines = 1
                 )
             } else {
-                Text(
-                    text = chat.lastMessage,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1
-                )
+                if (!chat.lastMessageSenderName.isNullOrEmpty() && (chat.isGroup || chat.lastMessageSenderName == "You")) {
+                    val annotatedText = buildAnnotatedString {
+                        withStyle(style = SpanStyle(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)) {
+                            append("${chat.lastMessageSenderName}: ")
+                        }
+                        append(chat.lastMessage)
+                    }
+                    Text(
+                        text = annotatedText,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1
+                    )
+                } else if (chat.lastMessage.isNotEmpty()) {
+                    Text(
+                        text = chat.lastMessage,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1
+                    )
+                } else {
+                    Text(
+                        text = "",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1
+                    )
+                }
             }
         }
 

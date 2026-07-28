@@ -65,6 +65,6 @@ interface Bot {
             text = encryptedReply,
             timestamp = System.currentTimeMillis()
         )
-        repository.insertMessage(replyMsg)
+        repository.insertMessageAndUpdateChat(replyMsg, sanitizedText, name)
     }
 }

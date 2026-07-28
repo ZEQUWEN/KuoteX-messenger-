@@ -281,6 +281,15 @@ class MessengerRepository(
     suspend fun updateContactStatus(chatId: String, isContact: Boolean) = chatDao.updateContactStatus(chatId, isContact)
     suspend fun updateActionMenuDismissed(chatId: String, isDismissed: Boolean) = chatDao.updateActionMenuDismissed(chatId, isDismissed)
     suspend fun insertMessage(message: Message) = messageDao.insertMessage(message.copy(text = CryptoManager.encrypt(message.text), audioPath = message.audioPath?.let { CryptoManager.encrypt(it) }, mediaPath = message.mediaPath?.let { CryptoManager.encrypt(it) }, documentData = message.documentData?.let { CryptoManager.encrypt(it) }))
+    
+    suspend fun insertMessageAndUpdateChat(message: Message, plainText: String, senderName: String? = null) {
+        insertMessage(message)
+        val chat = chatDao.getChatById(message.chatId)
+        if (chat != null) {
+            chatDao.insertChat(chat.copy(lastMessage = plainText, lastMessageTimestamp = message.timestamp, lastMessageSenderName = senderName))
+        }
+    }
+
     suspend fun updateReaction(messageId: String, reaction: String) = messageDao.updateReaction(messageId, reaction)
     suspend fun updateDraft(chatId: String, draft: String?) {
         if (draft.isNullOrBlank()) {

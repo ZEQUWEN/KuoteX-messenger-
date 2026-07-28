@@ -89,6 +89,7 @@ data class Chat(
     val isSecret: Boolean = false,
     val lastMessage: String,
     val lastMessageTimestamp: Long = 0L,
+    val lastMessageSenderName: String? = null,
     val unreadCount: Int = 0,
     val pinnedMessageId: String? = null,
     val isContact: Boolean = false,
@@ -599,7 +600,7 @@ class AppViewModel(private val repository: MessengerRepository, val userPrefs: c
                 documentData = documentData,
                 isDelivered = isOnline // if offline, it stays pending (not delivered)
             )
-            repository.insertMessage(msg)
+            repository.insertMessageAndUpdateChat(msg, sanitizedText, "You")
             
             if (isOnline) {
                 // Simulate reply if online
@@ -612,15 +613,16 @@ class AppViewModel(private val repository: MessengerRepository, val userPrefs: c
                         BotService.handleMessage(sanitizedText, chat, repository, signalProtocolManager)
                     } else {
                         kotlinx.coroutines.delay(1500)
+                        val replyText = "Got it: $sanitizedText"
                         val reply = Message(
                             id = java.util.UUID.randomUUID().toString(),
                             chatId = chatId,
                             senderId = "other_user",
-                            text = signalProtocolManager.encryptMessage("Got it: $sanitizedText"),
+                            text = signalProtocolManager.encryptMessage(replyText),
                             timestamp = System.currentTimeMillis(),
                             isDelivered = true
                         )
-                        repository.insertMessage(reply)
+                        repository.insertMessageAndUpdateChat(reply, replyText, chat.title)
                     }
                 }
             }
@@ -648,15 +650,17 @@ class AppViewModel(private val repository: MessengerRepository, val userPrefs: c
                     kotlinx.coroutines.delay(1000)
                     simulateTyping(chat.id)
                     kotlinx.coroutines.delay(1500)
+                    val decryptedText = signalProtocolManager.decryptMessage(msg.text)
+                    val replyText = "Offline msg received: $decryptedText"
                     val reply = Message(
                         id = java.util.UUID.randomUUID().toString(),
                         chatId = chat.id,
                         senderId = "other_user",
-                        text = signalProtocolManager.encryptMessage("Offline msg received: ${msg.text}"),
+                        text = signalProtocolManager.encryptMessage(replyText),
                         timestamp = System.currentTimeMillis(),
                         isDelivered = true
                     )
-                    repository.insertMessage(reply)
+                    repository.insertMessageAndUpdateChat(reply, replyText, chat.title)
                 }
             }
         }

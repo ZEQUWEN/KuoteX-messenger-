@@ -313,7 +313,7 @@ class BotFather : Bot {
             buttonsData = buttonsData,
             timestamp = System.currentTimeMillis()
         )
-        repository.insertMessage(replyMsg)
+        repository.insertMessageAndUpdateChat(replyMsg, sanitizedText, name)
     }
 }
 
