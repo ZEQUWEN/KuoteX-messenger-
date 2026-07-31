@@ -339,7 +339,7 @@ fun MainAppNavigation(viewModel: AppViewModel) {
                             composable("settings/profile?highlightId={highlightId}", arguments = listOf(navArgument("highlightId") { nullable = true; defaultValue = null })) { backStackEntry ->
                                 val highlightId = backStackEntry.arguments?.getString("highlightId")
                                 androidx.compose.runtime.LaunchedEffect(highlightId) { viewModel.setHighlightEvent(highlightId) }
-                                AccountScreen(onBack = { mainNavController.popBackStack() })
+                                AccountScreen(onBack = { mainNavController.popBackStack() }, appViewModel = viewModel)
                             }
                             composable("settings/general?highlightId={highlightId}", arguments = listOf(navArgument("highlightId") { nullable = true; defaultValue = null })) { backStackEntry ->
                                 val highlightId = backStackEntry.arguments?.getString("highlightId")

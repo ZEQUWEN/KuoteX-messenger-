@@ -1,4 +1,9 @@
-package com.example.ui
+import re
+
+with open("app/src/main/java/com/example/ui/AccountViewModel.kt", "r") as f:
+    content = f.read()
+
+new_content = """package com.example.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -119,8 +124,6 @@ class AccountViewModel : ViewModel() {
     private val _usernameAvailable = MutableStateFlow<Boolean?>(null)
     val usernameAvailable: StateFlow<Boolean?> = _usernameAvailable.asStateFlow()
 
-private var lastSavedState: AccountState? = null
-
     init {
         loadProfile()
     }
@@ -129,87 +132,13 @@ private var lastSavedState: AccountState? = null
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isInitialLoading = true)
             delay(1500) // Mocking network load from Supabase
-            val profile = SupabaseMock.Database.getProfile()
-            lastSavedState = profile
-            _uiState.value = profile
+            _uiState.value = SupabaseMock.Database.getProfile()
         }
     }
 
-    fun hasUnsavedChanges(firstName: String, lastName: String, bio: String, socialLinks: Map<String, String>): Boolean {
-        val currentSaved = lastSavedState ?: _uiState.value
-        return firstName != currentSaved.firstName ||
-               lastName != currentSaved.lastName ||
-               bio != currentSaved.bio ||
-               socialLinks != currentSaved.socialLinks
-    }
-
-    fun updateProfileData(firstName: String, lastName: String, bio: String, socialLinks: Map<String, String>) {
-        val previousState = _uiState.value
-        val newState = previousState.copy(
-            firstName = firstName, 
-            lastName = lastName, 
-            bio = bio,
-            socialLinks = socialLinks,
-            isSuccess = false,
-            error = null
-        )
-        
-        // Optimistic UI update
-        _uiState.value = newState
-
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true)
-            
-            val profileResult = SupabaseMock.Database.updateProfile(
-                firstName = firstName,
-                lastName = lastName,
-                bio = bio,
-                birthDate = newState.birthDate,
-                username = newState.username,
-                phone = newState.phone
-            )
-            
-            val socialResult = SupabaseMock.Database.updateSocialLinks(socialLinks)
-            
-            if (profileResult.isSuccess && socialResult.isSuccess) {
-                val finalState = newState.copy(isLoading = false, isSuccess = true)
-                lastSavedState = finalState
-                _uiState.value = finalState
-            } else {
-                // Rollback on failure
-                _uiState.value = previousState.copy(
-                    isLoading = false,
-                    error = profileResult.exceptionOrNull()?.message ?: socialResult.exceptionOrNull()?.message ?: "Ошибка сохранения"
-                )
-            }
-        }
-    }
-    
-    fun resetSuccessFlag() {
-        _uiState.value = _uiState.value.copy(isSuccess = false)
-    }
-
-    
-    fun saveProfile() {
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, error = null, isSuccess = false)
-            val currentState = _uiState.value
-            val result = SupabaseMock.Database.updateProfile(
-                firstName = currentState.firstName,
-                lastName = currentState.lastName,
-                bio = currentState.bio,
-                birthDate = currentState.birthDate,
-                username = currentState.username,
-                phone = currentState.phone
-            )
-            
-            if (result.isSuccess) {
-                _uiState.value = _uiState.value.copy(isLoading = false, isSuccess = true)
-                lastSavedState = _uiState.value
-            } else {
-                _uiState.value = _uiState.value.copy(isLoading = false, error = result.exceptionOrNull()?.message)
-            }
-        }
+    fun updateProfile(firstName: String, lastName: String, bio: String) {
+        _uiState.value = _uiState.value.copy(firstName = firstName, lastName = lastName, bio = bio)
+        saveProfile()
     }
 
     fun updateBirthDate(date: String) {
@@ -218,20 +147,18 @@ private var lastSavedState: AccountState? = null
     }
     
     fun updateAvatar(url: String) {
-        _uiState.value = _uiState.value.copy(avatarUrl = url, isSuccess = false)
+        _uiState.value = _uiState.value.copy(avatarUrl = url)
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true)
-            val result = SupabaseMock.Database.updateAvatar(url)
-            if (result.isSuccess) {
-                _uiState.value = _uiState.value.copy(isLoading = false, isSuccess = true)
-                lastSavedState = _uiState.value
-            } else {
-                _uiState.value = _uiState.value.copy(isLoading = false, error = result.exceptionOrNull()?.message)
-            }
+            SupabaseMock.Database.updateAvatar(url)
         }
     }
     
-
+    fun updateSocialLinks(links: Map<String, String>) {
+        _uiState.value = _uiState.value.copy(socialLinks = links)
+        viewModelScope.launch {
+            SupabaseMock.Database.updateSocialLinks(links)
+        }
+    }
 
     fun deleteAccount(onSuccess: () -> Unit, onError: (String) -> Unit) {
         viewModelScope.launch {
@@ -246,7 +173,26 @@ private var lastSavedState: AccountState? = null
         }
     }
     
-
+    private fun saveProfile() {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+            val currentState = _uiState.value
+            val result = SupabaseMock.Database.updateProfile(
+                firstName = currentState.firstName,
+                lastName = currentState.lastName,
+                bio = currentState.bio,
+                birthDate = currentState.birthDate,
+                username = currentState.username,
+                phone = currentState.phone
+            )
+            
+            if (result.isSuccess) {
+                _uiState.value = _uiState.value.copy(isLoading = false, isSuccess = true)
+            } else {
+                _uiState.value = _uiState.value.copy(isLoading = false, error = result.exceptionOrNull()?.message)
+            }
+        }
+    }
 
     fun requestPhoneChange(newPhone: String, onCodeSent: () -> Unit, onError: (String) -> Unit) {
         viewModelScope.launch {
@@ -317,3 +263,7 @@ private var lastSavedState: AccountState? = null
         }
     }
 }
+"""
+
+with open("app/src/main/java/com/example/ui/AccountViewModel.kt", "w") as f:
+    f.write(new_content)

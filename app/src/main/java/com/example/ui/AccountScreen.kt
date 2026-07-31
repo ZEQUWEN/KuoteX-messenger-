@@ -16,6 +16,11 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.CircularProgressIndicator
+
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -57,6 +62,7 @@ fun Modifier.shimmerEffect(): Modifier = composed {
 @Composable
 fun AccountScreen(
     onBack: () -> Unit,
+    appViewModel: com.example.ui.AppViewModel,
     viewModel: AccountViewModel = viewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -72,7 +78,37 @@ fun AccountScreen(
     var showUsernameChange by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
+    val snackbarHostState = remember { SnackbarHostState() }
+    
+    val activeAccount = com.example.ui.LocalActiveAccount.current
+
+    LaunchedEffect(state.isSuccess) {
+        if (state.isSuccess) {
+            snackbarHostState.showSnackbar("Изменения успешно сохранены")
+            
+            // Sync with global AppViewModel profile
+            if (activeAccount != null) {
+                appViewModel.updateProfile(
+                    id = activeAccount.id,
+                    username = "@" + state.username.removePrefix("@"),
+                    displayName = state.firstName + if (state.lastName.isNotBlank()) " ${state.lastName}" else "",
+                    bio = state.bio,
+                    profilePicUrl = state.avatarUrl ?: activeAccount.profilePicUrl
+                )
+            }
+            
+            viewModel.resetSuccessFlag()
+        }
+    }
+    
+    LaunchedEffect(state.error) {
+        if (state.error != null) {
+            snackbarHostState.showSnackbar(state.error ?: "Ошибка")
+        }
+    }
+
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("Аккаунт") },
@@ -82,13 +118,26 @@ fun AccountScreen(
                     }
                 },
                 actions = {
+                    val hasChanges = viewModel.hasUnsavedChanges(
+                        firstName, lastName, bio,
+                        mapOf("telegram" to socialTelegram, "github" to socialGithub)
+                    )
+                    
                     if (!state.isInitialLoading) {
-                        IconButton(onClick = { 
-                            viewModel.updateProfile(firstName, lastName, bio)
-                            viewModel.updateSocialLinks(mapOf("telegram" to socialTelegram, "github" to socialGithub))
-                            onBack()
-                        }) {
-                            Icon(Icons.Default.Check, "Сохранить")
+                        IconButton(
+                            onClick = { 
+                                viewModel.updateProfileData(
+                                    firstName, lastName, bio,
+                                    mapOf("telegram" to socialTelegram, "github" to socialGithub)
+                                )
+                            },
+                            enabled = hasChanges && !state.isLoading
+                        ) {
+                            if (state.isLoading) {
+                                CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                            } else {
+                                Icon(Icons.Default.Check, "Сохранить", tint = if (hasChanges) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f))
+                            }
                         }
                     }
                 },
