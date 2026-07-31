@@ -191,33 +191,58 @@ class AppViewModel(private val repository: MessengerRepository, val userPrefs: c
         _maxCacheSizeIndex.value = index
     }
 
-    private val _networkStats = MutableStateFlow(
-        mapOf(
-            NetworkType.ALL to NetworkStatsModel(NetworkType.ALL, 11700000L, 115100000L, listOf(
-                NetworkCategoryStats("Видео", 115800000L, Color(0xFF2196F3)),
-                NetworkCategoryStats("Файлы", 5100000L, Color(0xFF4CAF50)),
-                NetworkCategoryStats("Сообщения", 4800000L, Color(0xFFFF9800)),
-                NetworkCategoryStats("Фото", 1100000L, Color(0xFF9C27B0))
-            )),
-            NetworkType.MOBILE to NetworkStatsModel(NetworkType.MOBILE, 1900000L, 2900000L, listOf(
-                NetworkCategoryStats("Видео", 2900000L, Color(0xFF2196F3)),
-                NetworkCategoryStats("Файлы", 1100000L, Color(0xFF4CAF50)),
-                NetworkCategoryStats("Сообщения", 800000L, Color(0xFFFF9800)),
-                NetworkCategoryStats("Фото", 0L, Color(0xFF9C27B0))
-            )),
-            NetworkType.WIFI to NetworkStatsModel(NetworkType.WIFI, 9800000L, 112200000L, listOf(
-                NetworkCategoryStats("Видео", 112900000L, Color(0xFF2196F3)),
-                NetworkCategoryStats("Файлы", 4000000L, Color(0xFF4CAF50)),
-                NetworkCategoryStats("Сообщения", 4000000L, Color(0xFFFF9800)),
-                NetworkCategoryStats("Фото", 1100000L, Color(0xFF9C27B0))
-            )),
-            NetworkType.ROAMING to NetworkStatsModel(NetworkType.ROAMING, 0L, 0L, listOf(
-                NetworkCategoryStats("Видео", 0L, Color(0xFF2196F3)),
-                NetworkCategoryStats("Файлы", 0L, Color(0xFF4CAF50)),
-                NetworkCategoryStats("Сообщения", 0L, Color(0xFFFF9800)),
-                NetworkCategoryStats("Фото", 0L, Color(0xFF9C27B0))
-            ))
-        )
+    private fun getColorForCategory(name: String): Color {
+        return when (name) {
+            "Видео" -> Color(0xFF2196F3)
+            "Файлы" -> Color(0xFF4CAF50)
+            "Сообщения" -> Color(0xFFFF9800)
+            "Фото" -> Color(0xFF9C27B0)
+            else -> Color.Gray
+        }
+    }
+
+    private fun recalculateAll(map: Map<NetworkType, NetworkStatsModel>): NetworkStatsModel {
+        val mobile = map[NetworkType.MOBILE]
+        val wifi = map[NetworkType.WIFI]
+        val roaming = map[NetworkType.ROAMING]
+        
+        val sent = (mobile?.sentBytes ?: 0L) + (wifi?.sentBytes ?: 0L) + (roaming?.sentBytes ?: 0L)
+        val received = (mobile?.receivedBytes ?: 0L) + (wifi?.receivedBytes ?: 0L) + (roaming?.receivedBytes ?: 0L)
+        
+        val categories = listOf("Видео", "Файлы", "Сообщения", "Фото").map { catName ->
+            val sum = listOfNotNull(mobile, wifi, roaming).sumOf { model ->
+                model.categories.find { it.categoryName == catName }?.sizeBytes ?: 0L
+            }
+            NetworkCategoryStats(catName, sum, getColorForCategory(catName))
+        }
+        return NetworkStatsModel(NetworkType.ALL, sent, received, categories)
+    }
+
+    private val _networkStats = MutableStateFlow<Map<NetworkType, NetworkStatsModel>>(
+        run {
+            val map = mutableMapOf(
+                NetworkType.MOBILE to NetworkStatsModel(NetworkType.MOBILE, 1900000L, 2900000L, listOf(
+                    NetworkCategoryStats("Видео", 2900000L, Color(0xFF2196F3)),
+                    NetworkCategoryStats("Файлы", 1100000L, Color(0xFF4CAF50)),
+                    NetworkCategoryStats("Сообщения", 800000L, Color(0xFFFF9800)),
+                    NetworkCategoryStats("Фото", 0L, Color(0xFF9C27B0))
+                )),
+                NetworkType.WIFI to NetworkStatsModel(NetworkType.WIFI, 9800000L, 112200000L, listOf(
+                    NetworkCategoryStats("Видео", 112900000L, Color(0xFF2196F3)),
+                    NetworkCategoryStats("Файлы", 4000000L, Color(0xFF4CAF50)),
+                    NetworkCategoryStats("Сообщения", 4000000L, Color(0xFFFF9800)),
+                    NetworkCategoryStats("Фото", 1100000L, Color(0xFF9C27B0))
+                )),
+                NetworkType.ROAMING to NetworkStatsModel(NetworkType.ROAMING, 0L, 0L, listOf(
+                    NetworkCategoryStats("Видео", 0L, Color(0xFF2196F3)),
+                    NetworkCategoryStats("Файлы", 0L, Color(0xFF4CAF50)),
+                    NetworkCategoryStats("Сообщения", 0L, Color(0xFFFF9800)),
+                    NetworkCategoryStats("Фото", 0L, Color(0xFF9C27B0))
+                ))
+            )
+            map[NetworkType.ALL] = recalculateAll(map)
+            map
+        }
     )
     val networkStats = _networkStats.asStateFlow()
 
@@ -258,43 +283,54 @@ class AppViewModel(private val repository: MessengerRepository, val userPrefs: c
             receivedBytes = currentStats.receivedBytes + receivedBytes,
             categories = newCategories
         )
-        
-        // Update ALL network type
-        val allStats = currentMap[NetworkType.ALL] ?: return
-        val allNewCategories = allStats.categories.map {
-            if (it.categoryName == categoryName) {
-                it.copy(sizeBytes = it.sizeBytes + sentBytes + receivedBytes)
-            } else {
-                it
-            }
-        }
-        currentMap[NetworkType.ALL] = allStats.copy(
-            sentBytes = allStats.sentBytes + sentBytes,
-            receivedBytes = allStats.receivedBytes + receivedBytes,
-            categories = allNewCategories
-        )
-        
+        currentMap[NetworkType.ALL] = recalculateAll(currentMap)
         _networkStats.value = currentMap
     }
 
     fun resetNetworkStats(type: NetworkType) {
         val currentMap = _networkStats.value.toMutableMap()
-        currentMap[type] = NetworkStatsModel(type, 0L, 0L, listOf(
-            NetworkCategoryStats("Видео", 0L, Color(0xFF2196F3)),
-            NetworkCategoryStats("Файлы", 0L, Color(0xFF4CAF50)),
-            NetworkCategoryStats("Сообщения", 0L, Color(0xFFFF9800)),
-            NetworkCategoryStats("Фото", 0L, Color(0xFF9C27B0))
-        ))
+        if (type == NetworkType.ALL) {
+            NetworkType.values().forEach { t ->
+                currentMap[t] = NetworkStatsModel(t, 0L, 0L, listOf(
+                    NetworkCategoryStats("Видео", 0L, Color(0xFF2196F3)),
+                    NetworkCategoryStats("Файлы", 0L, Color(0xFF4CAF50)),
+                    NetworkCategoryStats("Сообщения", 0L, Color(0xFFFF9800)),
+                    NetworkCategoryStats("Фото", 0L, Color(0xFF9C27B0))
+                ))
+            }
+        } else {
+            currentMap[type] = NetworkStatsModel(type, 0L, 0L, listOf(
+                NetworkCategoryStats("Видео", 0L, Color(0xFF2196F3)),
+                NetworkCategoryStats("Файлы", 0L, Color(0xFF4CAF50)),
+                NetworkCategoryStats("Сообщения", 0L, Color(0xFFFF9800)),
+                NetworkCategoryStats("Фото", 0L, Color(0xFF9C27B0))
+            ))
+            currentMap[NetworkType.ALL] = recalculateAll(currentMap)
+        }
         _networkStats.value = currentMap
     }
 
     fun clearCache(selectedCategoryNames: List<String>) {
         val currentStats = _storageStats.value
-        val newCategories = currentStats.categories.map {
-            if (selectedCategoryNames.contains(it.categoryName)) {
-                it.copy(sizeBytes = 0L)
+        val newCategories = currentStats.categories.map { category ->
+            if (category.subCategories != null) {
+                val newSubCategories = category.subCategories.map { sub ->
+                    if (selectedCategoryNames.contains(sub.categoryName)) {
+                        sub.copy(sizeBytes = 0L)
+                    } else {
+                        sub
+                    }
+                }
+                category.copy(
+                    sizeBytes = newSubCategories.sumOf { it.sizeBytes },
+                    subCategories = newSubCategories
+                )
             } else {
-                it
+                if (selectedCategoryNames.contains(category.categoryName)) {
+                    category.copy(sizeBytes = 0L)
+                } else {
+                    category
+                }
             }
         }
         _storageStats.value = currentStats.copy(categories = newCategories)

@@ -62,60 +62,62 @@ class WebSocketManager(private val okHttpClient: OkHttpClient) {
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
-                try {
-                    val json = JSONObject(text)
-                    when (json.optString("type")) {
-                        "new_message" -> {
-                            val data = json.getJSONObject("data")
-                            scope.launch {
-                                _events.emit(
-                                    InboundEvent.NewMessage(
-                                        messageId = data.optString("message_id", data.optString("messageId")),
-                                        chatId = data.optString("chat_id", data.optString("chatId")),
-                                        senderId = data.optString("sender_id", data.optString("senderId")),
-                                        text = data.optString("text"),
-                                        timestamp = data.optLong("timestamp", System.currentTimeMillis())
+                if (text.trim().startsWith("{")) {
+                    try {
+                        val json = JSONObject(text)
+                        when (json.optString("type")) {
+                            "new_message" -> {
+                                val data = json.getJSONObject("data")
+                                scope.launch {
+                                    _events.emit(
+                                        InboundEvent.NewMessage(
+                                            messageId = data.optString("message_id", data.optString("messageId")),
+                                            chatId = data.optString("chat_id", data.optString("chatId")),
+                                            senderId = data.optString("sender_id", data.optString("senderId")),
+                                            text = data.optString("text"),
+                                            timestamp = data.optLong("timestamp", System.currentTimeMillis())
+                                        )
                                     )
-                                )
+                                }
+                            }
+                            "read_receipt" -> {
+                                val data = json.getJSONObject("data")
+                                scope.launch {
+                                    _events.emit(
+                                        InboundEvent.ReadReceipt(
+                                            chatId = data.optString("chat_id", data.optString("chatId")),
+                                            messageId = data.optString("message_id", data.optString("messageId"))
+                                        )
+                                    )
+                                }
+                            }
+                            "user_typing" -> {
+                                val data = json.getJSONObject("data")
+                                scope.launch {
+                                    _events.emit(
+                                        InboundEvent.UserTyping(
+                                            chatId = data.optString("chat_id", data.optString("chatId")),
+                                            userId = data.optString("user_id", data.optString("userId"))
+                                        )
+                                    )
+                                }
+                            }
+                            "presence_update" -> {
+                                val data = json.getJSONObject("data")
+                                scope.launch {
+                                    _events.emit(
+                                        InboundEvent.PresenceUpdate(
+                                            userId = data.optString("user_id", data.optString("userId")),
+                                            isOnline = data.optBoolean("is_online", data.optBoolean("isOnline")),
+                                            lastSeen = data.optLong("last_seen", data.optLong("lastSeen", System.currentTimeMillis()))
+                                        )
+                                    )
+                                }
                             }
                         }
-                        "read_receipt" -> {
-                            val data = json.getJSONObject("data")
-                            scope.launch {
-                                _events.emit(
-                                    InboundEvent.ReadReceipt(
-                                        chatId = data.optString("chat_id", data.optString("chatId")),
-                                        messageId = data.optString("message_id", data.optString("messageId"))
-                                    )
-                                )
-                            }
-                        }
-                        "user_typing" -> {
-                            val data = json.getJSONObject("data")
-                            scope.launch {
-                                _events.emit(
-                                    InboundEvent.UserTyping(
-                                        chatId = data.optString("chat_id", data.optString("chatId")),
-                                        userId = data.optString("user_id", data.optString("userId"))
-                                    )
-                                )
-                            }
-                        }
-                        "presence_update" -> {
-                            val data = json.getJSONObject("data")
-                            scope.launch {
-                                _events.emit(
-                                    InboundEvent.PresenceUpdate(
-                                        userId = data.optString("user_id", data.optString("userId")),
-                                        isOnline = data.optBoolean("is_online", data.optBoolean("isOnline")),
-                                        lastSeen = data.optLong("last_seen", data.optLong("lastSeen", System.currentTimeMillis()))
-                                    )
-                                )
-                            }
-                        }
+                    } catch (e: Exception) {
+                        Log.e("WebSocketManager", "Failed to parse ws message: $text", e)
                     }
-                } catch (e: Exception) {
-                    Log.e("WebSocketManager", "Failed to parse ws message", e)
                 }
             }
 

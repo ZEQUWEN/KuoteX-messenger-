@@ -58,7 +58,10 @@ fun SettingsStorageScreen(viewModel: AppViewModel, navController: NavController)
     val storageStats by viewModel.storageStats.collectAsState()
     val largestCategories = storageStats.categories.sortedByDescending { it.sizeBytes }.take(2)
 
+    val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("Данные и память") },
@@ -76,33 +79,48 @@ fun SettingsStorageScreen(viewModel: AppViewModel, navController: NavController)
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
         ) {
-            ListItem(
-                headlineContent = { Text("Использование памяти") },
-                supportingContent = { Text("Настройка автоудаления кэша") },
-                leadingContent = { 
-                    Icon(
-                        Icons.Filled.Storage, 
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary
-                    ) 
-                },
-                modifier = Modifier.clickable { navController.navigate("settings/storage/memory") }
-            )
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .padding(top = 16.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                Column {
+                    ListItem(
+                        headlineContent = { Text("Использование памяти") },
+                        supportingContent = { Text("Настройка автоудаления кэша") },
+                        leadingContent = { 
+                            Icon(
+                                Icons.Filled.Storage, 
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
+                            ) 
+                        },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                        modifier = Modifier.clickable { navController.navigate("settings/storage/memory") }
+                    )
+                    
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
+                    
+                    ListItem(
+                        headlineContent = { Text("Использование сети") },
+                        supportingContent = { Text("Статистика трафика") },
+                        leadingContent = { 
+                            Icon(
+                                Icons.Filled.DataUsage, 
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
+                            ) 
+                        },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                        modifier = Modifier.clickable { navController.navigate("settings/storage/network") }
+                    )
+                }
+            }
             
-            ListItem(
-                headlineContent = { Text("Использование сети") },
-                supportingContent = { Text("Статистика трафика") },
-                leadingContent = { 
-                    Icon(
-                        Icons.Filled.DataUsage, 
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary
-                    ) 
-                },
-                modifier = Modifier.clickable { navController.navigate("settings/storage/network") }
-            )
-            
-            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+            Spacer(modifier = Modifier.height(16.dp))
             
             var showOptimizeDialog by remember { mutableStateOf(false) }
             var isScanningForDuplicates by remember { mutableStateOf(false) }
@@ -156,122 +174,142 @@ fun SettingsStorageScreen(viewModel: AppViewModel, navController: NavController)
                 )
             }
 
+            val gradientColors = listOf(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.secondaryContainer)
+            val brush = androidx.compose.ui.graphics.Brush.verticalGradient(colors = gradientColors)
+            
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+                shape = RoundedCornerShape(16.dp)
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "Оптимизация хранилища",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "Рекомендуем: удаление старых медиасообщений или сжатие сохраненных изображений для освобождения места.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Button(onClick = {
-                            coroutineScope.launch {
-                                isScanningForDuplicates = true
-                                delay(1500) // Simulate scanning
-                                duplicateSizeFound = (Math.random() * 200 * 1024 * 1024).toLong() + 50 * 1024 * 1024 // 50MB to 250MB
-                                isScanningForDuplicates = false
-                                showOptimizeDialog = true
-                            }
-                        }) {
-                            if (isScanningForDuplicates) {
-                                CircularProgressIndicator(modifier = Modifier.size(16.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Сканирование...")
-                            } else {
-                                Text("Оптимизировать")
-                            }
-                        }
-                        OutlinedButton(onClick = { /* Action to export */ }) {
-                            Text("Экспорт")
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Button(
-                        onClick = { /* Action to clean old/duplicate files */ },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
-                    ) {
-                         Text("Очистить старые файлы и дубликаты")
-                    }
-                }
-            }
-
-            if (largestCategories.isNotEmpty()) {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp)
-                        .padding(bottom = 16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
-                ) {
+                Box(modifier = Modifier.background(brush)) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
-                            text = "Персональные рекомендации",
+                            text = "Оптимизация хранилища",
                             style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
                         )
                         Spacer(modifier = Modifier.height(8.dp))
-                        largestCategories.forEach { category ->
-                            val actionText = when (category.categoryName) {
-                                "Видео" -> "Удалить старые видеосообщения"
-                                "Фото" -> "Удалить дубликаты изображений"
-                                "Файлы" -> "Удалить дубликаты файлов"
-                                else -> "Очистить ${category.categoryName.lowercase()}"
+                        Text(
+                            text = "Рекомендуем: удаление старых медиасообщений или сжатие сохраненных изображений для освобождения места.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Button(
+                                onClick = {
+                                    coroutineScope.launch {
+                                        isScanningForDuplicates = true
+                                        delay(1500) // Simulate scanning
+                                        duplicateSizeFound = (Math.random() * 200 * 1024 * 1024).toLong() + 50 * 1024 * 1024 // 50MB to 250MB
+                                        isScanningForDuplicates = false
+                                        showOptimizeDialog = true
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                if (isScanningForDuplicates) {
+                                    CircularProgressIndicator(modifier = Modifier.size(16.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Сканирование...")
+                                } else {
+                                    Text("Оптимизировать")
+                                }
                             }
+                            OutlinedButton(
+                                onClick = { 
+                                    coroutineScope.launch {
+                                        com.example.utils.ExportUtils.exportCacheToZip(context)
+                                        snackbarHostState.showSnackbar("Файлы успешно сохранены в zip архив")
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Экспорт")
+                            }
+                        }
+                        
+                        if (largestCategories.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(16.dp))
+                            HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+                            Spacer(modifier = Modifier.height(16.dp))
+                            
                             Text(
-                                text = "• $actionText (${formatBytes(category.sizeBytes)})",
-                                style = MaterialTheme.typography.bodyMedium,
+                                text = "Персональные рекомендации",
+                                style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.onSecondaryContainer
                             )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            largestCategories.forEach { category ->
+                                val actionText = when (category.categoryName) {
+                                    "Видео" -> "Удалить старые видеосообщения"
+                                    "Фото" -> "Удалить дубликаты изображений"
+                                    "Файлы" -> "Удалить дубликаты файлов"
+                                    else -> "Очистить ${category.categoryName.lowercase()}"
+                                }
+                                Text(
+                                    text = "• $actionText (${formatBytes(category.sizeBytes)})",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                            }
                         }
                     }
                 }
             }
 
-            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+            Spacer(modifier = Modifier.height(16.dp))
             
             Text(
                 text = "Автозагрузка медиа",
                 color = MaterialTheme.colorScheme.primary,
                 style = MaterialTheme.typography.titleSmall,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                modifier = Modifier.padding(horizontal = 32.dp, vertical = 8.dp)
             )
             
-            var mobileEnabled by remember { mutableStateOf(true) }
-            ListItem(
-                headlineContent = { Text("Через мобильную сеть") },
-                supportingContent = { Text("Фото, Видео (15 MB), Файлы (3 MB)") },
-                trailingContent = { Switch(checked = mobileEnabled, onCheckedChange = { mobileEnabled = it }) }
-            )
-            
-            var wifiEnabled by remember { mutableStateOf(true) }
-            ListItem(
-                headlineContent = { Text("Через сети Wi-Fi") },
-                supportingContent = { Text("Фото, Видео (15 MB), Файлы (3 MB)") },
-                trailingContent = { Switch(checked = wifiEnabled, onCheckedChange = { wifiEnabled = it }) }
-            )
-            
-            var roamingEnabled by remember { mutableStateOf(false) }
-            ListItem(
-                headlineContent = { Text("В роуминге") },
-                supportingContent = { Text("Фото, Видео (15 MB), Файлы (3 MB)") },
-                trailingContent = { Switch(checked = roamingEnabled, onCheckedChange = { roamingEnabled = it }) }
-            )
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 16.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                Column {
+                    var mobileEnabled by remember { mutableStateOf(true) }
+                    ListItem(
+                        headlineContent = { Text("Через мобильную сеть") },
+                        supportingContent = { Text("Фото, Видео (15 MB), Файлы (3 MB)") },
+                        trailingContent = { Switch(checked = mobileEnabled, onCheckedChange = { mobileEnabled = it }) },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                    )
+                    
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
+                    
+                    var wifiEnabled by remember { mutableStateOf(true) }
+                    ListItem(
+                        headlineContent = { Text("Через сети Wi-Fi") },
+                        supportingContent = { Text("Фото, Видео (15 MB), Файлы (3 MB)") },
+                        trailingContent = { Switch(checked = wifiEnabled, onCheckedChange = { wifiEnabled = it }) },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                    )
+                    
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
+                    
+                    var roamingEnabled by remember { mutableStateOf(false) }
+                    ListItem(
+                        headlineContent = { Text("В роуминге") },
+                        supportingContent = { Text("Фото, Видео (15 MB), Файлы (3 MB)") },
+                        trailingContent = { Switch(checked = roamingEnabled, onCheckedChange = { roamingEnabled = it }) },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                    )
+                }
+            }
         }
     }
 }
@@ -794,6 +832,8 @@ fun StorageUsageScreen(viewModel: AppViewModel, navController: NavController) {
                                             }
                                         }
                                         viewModel.clearCache(selectedNames)
+                                        CacheCalculator.clearAppCache(context, selectedNames)
+                                        CacheCalculator.forceScan(context, scope)
                                         isClearing = false
                                     }
                                 }
