@@ -82,11 +82,15 @@ fun AccountScreen(
     
     val activeAccount = com.example.ui.LocalActiveAccount.current
 
+    LaunchedEffect(activeAccount) {
+        if (state.isInitialLoading) {
+            viewModel.initialize(activeAccount)
+        }
+    }
+
     LaunchedEffect(state.isSuccess) {
         if (state.isSuccess) {
-            snackbarHostState.showSnackbar("Изменения успешно сохранены")
-            
-            // Sync with global AppViewModel profile
+            // Sync with global AppViewModel profile FIRST so it doesn't get cancelled by snackbar suspend
             if (activeAccount != null) {
                 appViewModel.updateProfile(
                     id = activeAccount.id,
@@ -96,8 +100,8 @@ fun AccountScreen(
                     profilePicUrl = state.avatarUrl ?: activeAccount.profilePicUrl
                 )
             }
-            
             viewModel.resetSuccessFlag()
+            snackbarHostState.showSnackbar("Изменения успешно сохранены")
         }
     }
     

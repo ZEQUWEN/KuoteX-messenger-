@@ -45,7 +45,8 @@ data class UserAccount(
     val bio: String = "",
     val sessionToken: String? = null,
     val customStatus: String = "",
-    val encryptedPasscode: String? = null
+    val encryptedPasscode: String? = null,
+    val phoneNumber: String = ""
 )
 
 @Entity(tableName = "contacts")
@@ -482,9 +483,9 @@ class AppViewModel(private val repository: MessengerRepository, val userPrefs: c
             // Seed initial data if empty
             val accs = repository.allAccounts.firstOrNull(); if (accs.isNullOrEmpty()) {
                 
-                    repository.insertAccount(UserAccount("1", "@neo_hacker", "Neo", "https://i.pravatar.cc/150?img=11", true, true))
-                    repository.insertAccount(UserAccount("2", "@synth_wave", "Synth Wave", "https://i.pravatar.cc/150?img=33", false, false))
-                    repository.insertAccount(UserAccount("3", "@cyber_punk", "Cyber P.", "https://i.pravatar.cc/150?img=55", false, false))
+                    repository.insertAccount(UserAccount("1", "@neo_hacker", "Neo", "https://i.pravatar.cc/150?img=11", true, true, phoneNumber = "+7 (922) 669-26-82"))
+                    repository.insertAccount(UserAccount("2", "@synth_wave", "Synth Wave", "https://i.pravatar.cc/150?img=33", false, false, phoneNumber = "+7 (999) 111-22-33"))
+                    repository.insertAccount(UserAccount("3", "@cyber_punk", "Cyber P.", "https://i.pravatar.cc/150?img=55", false, false, phoneNumber = "+7 (777) 444-55-66"))
                     
                     repository.insertChat(Chat("c1", "Neon Coders", isGroup = true, lastMessage = "Let's build in Compose! \uD83D\uDD25", unreadCount = 4))
                     repository.insertChat(Chat("botfather", "BotFather", isBot = true, lastMessage = "", unreadCount = 0))
@@ -784,10 +785,11 @@ class AppViewModel(private val repository: MessengerRepository, val userPrefs: c
             repository.switchActiveAccount(accountId)
         }
     }
-    fun createAccount(username: String, displayName: String, bio: String = "", profilePicUrl: String = "", customStatus: String = "") {
+    fun createAccount(phoneNumber: String, username: String, displayName: String, bio: String = "", profilePicUrl: String = "", customStatus: String = "") {
         viewModelScope.launch {
             val account = UserAccount(
                 id = java.util.UUID.randomUUID().toString(),
+                phoneNumber = phoneNumber,
                 username = username,
                 displayName = displayName,
                 bio = bio,

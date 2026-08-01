@@ -272,7 +272,7 @@ fun MyProfileScreen(viewModel: AppViewModel, navController: NavController) {
                 ) {
                     Column(modifier = Modifier.padding(vertical = 8.dp)) {
                         InfoItem(
-                            title = "+7 (922) 669-26-82", // Example hardcoded or from account
+                            title = activeAccount.phoneNumber.ifBlank { "+7 (922) 669-26-82" },
                             subtitle = "Телефон",
                             onClick = { clipboardManager.setText(AnnotatedString("+79226692682")) },
                             menuItems = { closeMenu ->

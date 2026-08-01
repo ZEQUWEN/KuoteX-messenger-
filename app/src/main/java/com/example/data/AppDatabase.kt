@@ -148,7 +148,7 @@ interface ContactDao {
     suspend fun deleteContact(contactId: String)
 }
 
-@Database(entities = [UserAccount::class, Chat::class, Message::class, GroupMember::class, Draft::class, Contact::class], version = 12, exportSchema = false)
+@Database(entities = [UserAccount::class, Chat::class, Message::class, GroupMember::class, Draft::class, Contact::class], version = 13, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun userDao(): UserDao
     abstract fun chatDao(): ChatDao

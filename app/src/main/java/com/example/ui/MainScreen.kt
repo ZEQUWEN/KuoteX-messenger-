@@ -200,10 +200,11 @@ fun MainAppNavigation(viewModel: AppViewModel) {
                     }
                     composable("register") {
                         RegistrationScreen(
+                            accounts = accounts,
                             onNavigateToLogin = { rootNavController.navigate("auth") },
                             onRegisterSuccess = { username ->
                                 viewModel.clearAddingAccount() 
-                                viewModel.createAccount(username, username)
+                                viewModel.createAccount(phoneNumber = username, username = username, displayName = username)
                             }
                         )
                     }

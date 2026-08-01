@@ -98,6 +98,7 @@ fun LoginScreen(
     var showTwoFactor by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     Box(
         modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
@@ -333,6 +334,7 @@ enum class RegistrationMethod {
 
 @Composable
 fun RegistrationScreen(
+    accounts: List<com.example.ui.UserAccount>,
     onNavigateToLogin: () -> Unit,
     onRegisterSuccess: (String) -> Unit
 ) {
@@ -355,6 +357,7 @@ fun RegistrationScreen(
     )
     var isLoading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     Box(
         modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
@@ -484,11 +487,19 @@ fun RegistrationScreen(
                     
                     Button(
                         onClick = {
-                            scope.launch {
-                                isLoading = true
-                                delay(1500)
-                                isLoading = false
-                                onRegisterSuccess(username)
+                            if (accounts.any { it.username == username || it.phoneNumber == username }) {
+                                android.widget.Toast.makeText(
+                                    context,
+                                    "Аккаунт с таким номером/email уже существует",
+                                    android.widget.Toast.LENGTH_LONG
+                                ).show()
+                            } else {
+                                scope.launch {
+                                    isLoading = true
+                                    delay(1500)
+                                    isLoading = false
+                                    onRegisterSuccess(username)
+                                }
                             }
                         },
                         modifier = Modifier.fillMaxWidth(),

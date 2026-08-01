@@ -440,7 +440,7 @@ fun SettingsMenuScreen(viewModel: AppViewModel, navController: NavController) {
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 
-                val phoneNumber = "+7 (922) 669-26-82" // Dummy phone number as requested to match style
+                val phoneNumber = activeAccount.phoneNumber.ifBlank { "+7 (922) 669-26-82" }
                 val usernameText = if(activeAccount.username.startsWith("@")) activeAccount.username else "@${activeAccount.username}"
                 Text(
                     text = "$phoneNumber • $usernameText",
